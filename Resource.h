@@ -16,6 +16,8 @@
 #define IDC_TRACKLIST                   1010
 #define IDC_EDIT1                       1011
 #define IDC_TIME                        1012
+#define IDC_TIME2                       1013
+#define IDC_TIMEPCT                     1013
 
 // Next default values for new objects
 // 

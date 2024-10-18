@@ -136,6 +136,46 @@ bool CMCIObject::GetTrackLength(BYTE track, BYTE& min, BYTE& sek, BYTE& frame) {
 	return true;
 }
 
+int CMCIObject::GetPlayLength(BYTE track) {
+	if (m_op.wDeviceID == 0) return false;
+	int sec=0;
+	BYTE min, sek;
+	MCI_STATUS_PARMS length;
+	length.dwTrack = track;
+	length.dwItem = MCI_STATUS_LENGTH;
+
+	MCI_STATUS_PARMS status;
+	status.dwItem = MCI_STATUS_TIME_FORMAT;
+	if ((m_result = mciSendCommand(m_op.wDeviceID,
+		MCI_STATUS, MCI_STATUS_ITEM, (DWORD_PTR)&status)) != 0)
+		return sec;
+
+	switch (status.dwReturn) {
+	case MCI_FORMAT_TMSF:
+		if ((m_result = mciSendCommand(m_op.wDeviceID,
+			MCI_STATUS, MCI_STATUS_ITEM | MCI_TRACK,
+			(DWORD_PTR)(LPMCI_STATUS_PARMS)&length)) != 0) {
+			MCIError();
+			return false;
+		}
+		m_result = length.dwReturn & 0x000000FF; track = (BYTE)m_result;
+		m_result = length.dwReturn & 0x0000FF00; min = (BYTE)(m_result >> 8);
+		m_result = length.dwReturn & 0x00FF0000; sek = (BYTE)(m_result >> 16);
+		return min*60+sek;
+	case MCI_FORMAT_MILLISECONDS:
+		if ((m_result = mciSendCommand(m_op.wDeviceID,
+			MCI_STATUS, MCI_STATUS_ITEM,
+			(DWORD_PTR)(LPMCI_STATUS_PARMS)&length)) != 0) {
+			MCIError();
+			return false;
+		}
+
+		return length.dwReturn / 1000;
+	}
+	return sec; // dont count not supported media
+	
+}
+
 bool CMCIObject::GetTMSFPosition(BYTE& track, BYTE& min, BYTE& sek, BYTE& frame) {
 	track = min = sek = frame = 0;
 	if (m_op.wDeviceID == 0) return false;

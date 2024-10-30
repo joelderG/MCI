@@ -179,11 +179,16 @@ void CMCIDlg::OnTrackListChange()
 void CMCIDlg::OnTimer(UINT_PTR nIDEvent)
 {
 	int pos = 0;
-	CString str, str_pct;
-	unsigned char  t_p, m_p, s_p, f_p;
+	float percent= 0;
+	CString str, str_pct, str_per;
+	unsigned char t_p, m_p, s_p, f_p;
 	mci.GetTMSFPosition(t_p, m_p, s_p, f_p);
 	str.Format(L"[%02d] %02d:%02d", t_p, m_p, s_p);
 	SetDlgItemText(IDC_TIME, str);
+
+	mci.GetTrackPercent(percent);
+	str_pct.Format(L"%.02f%%", percent);
+	SetDlgItemText(IDC_TIMEPCT, str_pct);
 
 	pos = (int)s_p;
 	int gesamt_seconds = mci.GetPlayLength(t_p);
@@ -191,8 +196,8 @@ void CMCIDlg::OnTimer(UINT_PTR nIDEvent)
 		gesamt_seconds = 1;
 	else gesamt_seconds = mci.GetPlayLength(t_p);
 
-	str_pct.Format(L"%d %%",(int) (((float)pos / gesamt_seconds) * 100));
-	SetDlgItemText(IDC_TIMEPCT, str_pct);
+	str_per.Format(L"%.02f%%", (((float)pos / gesamt_seconds) * 100));
+	SetDlgItemText(IDC_TIMEPCT, str_per);
 
 	CDialogEx::OnTimer(nIDEvent);
 }

@@ -136,46 +136,6 @@ bool CMCIObject::GetTrackLength(BYTE track, BYTE& min, BYTE& sek, BYTE& frame) {
 	return true;
 }
 
-int CMCIObject::GetPlayLength(BYTE track) {
-	if (m_op.wDeviceID == 0) return false;
-	int sec=0;
-	BYTE min, sek;
-	MCI_STATUS_PARMS length;
-	length.dwTrack = track;
-	length.dwItem = MCI_STATUS_LENGTH;
-
-	MCI_STATUS_PARMS status;
-	status.dwItem = MCI_STATUS_TIME_FORMAT;
-	if ((m_result = mciSendCommand(m_op.wDeviceID,
-		MCI_STATUS, MCI_STATUS_ITEM, (DWORD_PTR)&status)) != 0)
-		return sec;
-
-	switch (status.dwReturn) {
-	case MCI_FORMAT_TMSF:
-		if ((m_result = mciSendCommand(m_op.wDeviceID,
-			MCI_STATUS, MCI_STATUS_ITEM | MCI_TRACK,
-			(DWORD_PTR)(LPMCI_STATUS_PARMS)&length)) != 0) {
-			MCIError();
-			return false;
-		}
-		m_result = length.dwReturn & 0x000000FF; track = (BYTE)m_result;
-		m_result = length.dwReturn & 0x0000FF00; min = (BYTE)(m_result >> 8);
-		m_result = length.dwReturn & 0x00FF0000; sek = (BYTE)(m_result >> 16);
-		return min*60+sek;
-	case MCI_FORMAT_MILLISECONDS:
-		if ((m_result = mciSendCommand(m_op.wDeviceID,
-			MCI_STATUS, MCI_STATUS_ITEM,
-			(DWORD_PTR)(LPMCI_STATUS_PARMS)&length)) != 0) {
-			MCIError();
-			return false;
-		}
-
-		return length.dwReturn / 1000;
-	}
-	return sec; // dont count not supported media
-	
-}
-
 bool CMCIObject::GetTMSFPosition(BYTE& track, BYTE& min, BYTE& sek, BYTE& frame) {
 	track = min = sek = frame = 0;
 	if (m_op.wDeviceID == 0) return false;
@@ -249,4 +209,112 @@ void CMCIObject::MCIError() {
 		strcpy_s(buf, "Unknown error");
 	AfxMessageBox((LPCWSTR)buf);
 	m_op.wDeviceID = 0;
+}
+
+bool CMCIObject::GetMediaLength(DWORD& totalms) {
+	if (!m_op.wDeviceID == 0) return false;
+	MCI_STATUS_PARMS status;
+	status.dwItem = MCI_STATUS_LENGTH;
+	if ((m_result = mciSendCommand(m_op.wDeviceID,
+		MCI_STATUS, MCI_STATUS_ITEM, (DWORD_PTR)&status)) != 0) {
+		MCIError();
+		return false;
+	}
+
+	totalms = status.dwReturn;
+	return true;
+}
+
+bool CMCIObject::GetTrackPercent(float& per) {
+	BYTE t, m, s, f, full_min, full_s, full_f = 0;
+	float total_s, current_s = 0.0f;
+	DWORD totalMs, currentMs = 0;
+
+	if (m_op.wDeviceID == 0) return false;
+
+	MCI_STATUS_PARMS status;
+	status.dwItem = MCI_STATUS_TIME_FORMAT;
+	if ((m_result = mciSendCommand(m_op.wDeviceID,
+		MCI_STATUS, MCI_STATUS_ITEM, (DWORD_PTR)&status)) != 0) {
+		return false;
+	}
+
+	switch (status.dwReturn) {
+	case MCI_FORMAT_TMSF:
+		if (!GetTMSFPosition(t, m, s, f)) {
+			return false;
+		}
+
+		if (!GetTrackLength(t, full_min, full_s, full_f)) {
+			return false;
+		}
+
+		total_s = full_min * 60 + full_s;
+		current_s = m * 60 + s;
+		if (total_s > 0) {
+			per = (current_s / total_s) * 100.0f;
+			return true;
+		}
+	case MCI_FORMAT_MILLISECONDS:
+		if (!GetMediaLength(totalMs)) {
+			return false;
+		}
+
+		MCI_STATUS_PARMS status;
+		status.dwItem = MCI_STATUS_POSITION;
+		if ((m_result = mciSendCommand(m_op.wDeviceID,
+			MCI_STATUS, MCI_STATUS_ITEM, (DWORD_PTR)&status)) != 0) {
+			MCIError();
+			return false;
+		}
+
+		currentMs = status.dwReturn;
+
+		if (totalMs > 0) {
+			per = (float)currentMs / (float)totalMs * 100.0f;
+			return true;
+		}
+	}
+	return false;
+}
+
+int CMCIObject::GetPlayLength(BYTE track) {
+	if (m_op.wDeviceID == 0) return 0; // Nicht geöffnet
+	int sec = 0;
+	BYTE min, sek;
+	MCI_STATUS_PARMS length;
+	length.dwTrack = track; // Track setzen
+	length.dwItem = MCI_STATUS_LENGTH;
+
+	MCI_STATUS_PARMS status;
+	status.dwItem = MCI_STATUS_TIME_FORMAT;
+	if ((m_result = mciSendCommand(m_op.wDeviceID,
+		MCI_STATUS, MCI_STATUS_ITEM, (DWORD_PTR)&status)) != 0)
+		return sec; // Fehler, Rückgabewert 0
+
+	switch (status.dwReturn) {
+	case MCI_FORMAT_TMSF:
+		if ((m_result = mciSendCommand(m_op.wDeviceID,
+			MCI_STATUS, MCI_STATUS_ITEM | MCI_TRACK,
+			(DWORD_PTR)(LPMCI_STATUS_PARMS)&length)) != 0) {
+			MCIError();
+			return 0; // Fehler
+		}
+		// Zerlege length.dwReturn in Minuten, Sekunden und Frames
+		min = (length.dwReturn >> 8) & 0xFF; // Minuten
+		sek = (length.dwReturn >> 16) & 0xFF; // Sekunden
+		// Berechne die gesamte Zeit in Sekunden
+		return (min * 60) + sek; // Gesamtlänge in Sekunden
+
+	case MCI_FORMAT_MILLISECONDS:
+		if ((m_result = mciSendCommand(m_op.wDeviceID,
+			MCI_STATUS, MCI_STATUS_ITEM,
+			(DWORD_PTR)(LPMCI_STATUS_PARMS)&length)) != 0) {
+			MCIError();
+			return 0; // Fehler
+		}
+		// Gebe die Länge in Sekunden zurück
+		return length.dwReturn / 1000; // Gesamtlänge in Sekunden
+	}
+	return sec; // Unbekanntes Format
 }

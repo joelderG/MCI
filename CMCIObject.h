@@ -15,7 +15,10 @@ public:
 	bool GetTMSFPosition(BYTE& track, BYTE& min, BYTE& sek, BYTE& frame);
 	bool GetTrackLength(BYTE track, BYTE& min, BYTE& sek, BYTE& frame);
 	bool TMSFSeek(BYTE track, BYTE min, BYTE sek, BYTE frame);
-	int CMCIObject::GetPlayLength(BYTE track);
+	bool GetMediaLength(DWORD& totalms);
+	bool GetTrackPercent(float& per);
+
+	int GetPlayLength(BYTE track);
 
 private:
 	void MCIError();
